@@ -1,0 +1,524 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>juego gráfico</title>
+  <style>
+    body {
+      margin: 0;
+      position: relative;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      min-height: 100vh;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(180deg, #072438 0%, #04202b 60%, #021018 100%);
+    }
+
+    /* Contenido principal (por encima del fondo) */
+    .content {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 12px;
+      box-sizing: border-box;
+    }
+
+    /* Fondo oceánico animado (capa fija detrás) */
+    .ocean {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      background: linear-gradient(180deg, #2e9adf 0%, #146b8a 45%, #063244 100%);
+      overflow: hidden;
+    }
+
+    .wave {
+      position: absolute;
+      left: 50%;
+      bottom: -10%;
+      width: 200%;
+      height: 160px;
+      margin-left: -100%;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 43%;
+      filter: blur(8px);
+      opacity: 0.6;
+      transform-origin: center;
+      animation: wave 7s linear infinite;
+    }
+
+    .wave.wave2 {
+      bottom: -6%;
+      height: 220px;
+      opacity: 0.4;
+      animation-duration: 11s;
+    }
+
+    .wave.wave3 {
+      bottom: -2%;
+      height: 120px;
+      opacity: 0.5;
+      animation-duration: 9s;
+    }
+
+    @keyframes wave {
+      0% {
+        transform: translateX(-30%) translateY(0) rotate(0deg);
+      }
+
+      50% {
+        transform: translateX(30%) translateY(-12px) rotate(0deg);
+      }
+
+      100% {
+        transform: translateX(-30%) translateY(0) rotate(0deg);
+      }
+    }
+
+    /* Burbujeo sutil */
+    .bubble {
+      position: absolute;
+      bottom: 10%;
+      width: 8px;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 50%;
+      filter: blur(1px);
+      animation: bubble 6s linear infinite;
+      opacity: 0.9;
+    }
+
+    .bubble.b2 {
+      width: 12px;
+      height: 12px;
+      bottom: 5%;
+      left: 20%;
+      animation-duration: 8s;
+      opacity: 0.7;
+    }
+
+    .bubble.b3 {
+      width: 6px;
+      height: 6px;
+      bottom: 12%;
+      left: 72%;
+      animation-duration: 5.5s;
+      opacity: 0.85;
+    }
+
+    @keyframes bubble {
+      0% {
+        transform: translateY(0) scale(1);
+        opacity: 0.9
+      }
+
+      50% {
+        transform: translateY(-40px) scale(1.2);
+        opacity: 0.6
+      }
+
+      100% {
+        transform: translateY(0) scale(1);
+        opacity: 0.9
+      }
+    }
+
+    canvas {
+      border: 4px solid rgba(90, 156, 255, 0.22);
+      border-radius: 12px;
+      background: linear-gradient(180deg, #08131a 0%, #0b1720 100%);
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+      max-width: calc(100% - 48px);
+      height: auto;
+    }
+
+    .info {
+      text-align: center;
+      margin-bottom: 14px;
+    }
+
+    .info span {
+      display: inline-block;
+      margin: 0 12px;
+      font-size: 18px;
+      letter-spacing: 0.02em;
+    }
+
+    .restart-btn {
+      display: none;
+      margin-top: 12px;
+      padding: 10px 18px;
+      background: linear-gradient(180deg, #0ea5e9, #0369a1);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(3, 105, 161, 0.25);
+    }
+
+    .restart-btn:active {
+      transform: translateY(1px);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="ocean" aria-hidden="true">
+    <div class="wave"></div>
+    <div class="wave wave2"></div>
+    <div class="wave wave3"></div>
+    <div class="bubble" style="left:12%; animation-delay:0s"></div>
+    <div class="bubble b2" style="left:44%; animation-delay:1s"></div>
+    <div class="bubble b3" style="left:78%; animation-delay:0.4s"></div>
+  </div>
+
+  <div class="content">
+    <div class="info">
+      <span>Puntos: <strong id="score">0</strong></span>
+      <span>Vida: <strong id="lives">3</strong></span>
+      <span id="message">Mueve el tiburón con el ratón</span>
+    </div>
+    <canvas id="gameCanvas" width="800" height="520"></canvas>
+    <button id="restartBtn" class="restart-btn">Reiniciar</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const livesEl = document.getElementById('lives');
+    const messageEl = document.getElementById('message');
+    const restartBtn = document.getElementById('restartBtn');
+
+    const player = {
+      x: canvas.width / 2 - 18,
+      y: canvas.height - 70,
+      width: 36,
+      height: 36,
+      color: '#3b82f6'
+    };
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const melody = [
+      { freq: 440, duration: 0.26 },
+      { freq: 494, duration: 0.26 },
+      { freq: 523, duration: 0.26 },
+      { freq: 587, duration: 0.26 },
+      { freq: 659, duration: 0.26 },
+      { freq: 587, duration: 0.26 },
+      { freq: 523, duration: 0.26 },
+      { freq: 494, duration: 0.26 }
+    ];
+    let audioStarted = false;
+
+    let score = 0;
+    let lives = 3;
+    let gameOver = false;
+    let enemyTimer = 0;
+    let enemyInterval = 90;
+    const enemies = [];
+    const coins = [];
+    const coinInterval = 130;
+    let coinTimer = 0;
+
+    function drawOrca(obj) {
+      const cx = obj.x + obj.width / 2;
+      const cy = obj.y + obj.height / 2;
+      const bw = obj.width;
+      const bh = obj.height * 0.9;
+
+      // cuerpo negro
+      ctx.fillStyle = '#0b0b0b';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, bw / 2, bh / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // mancha blanca del vientre
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(cx - bw * 0.05, cy + bh * 0.08, bw * 0.35, bh * 0.28, -0.25, 0, Math.PI * 2);
+      ctx.fill();
+
+      // aleta dorsal
+      ctx.fillStyle = '#0b0b0b';
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - bh * 0.5);
+      ctx.lineTo(cx + bw * 0.06, cy - bh * 0.2);
+      ctx.lineTo(cx - bw * 0.14, cy - bh * 0.18);
+      ctx.closePath();
+      ctx.fill();
+
+      // cola
+      ctx.beginPath();
+      ctx.moveTo(obj.x + obj.width * 0.05, cy);
+      ctx.lineTo(obj.x - obj.width * 0.4, cy - obj.height * 0.28);
+      ctx.lineTo(obj.x - obj.width * 0.4, cy + obj.height * 0.28);
+      ctx.closePath();
+      ctx.fill();
+
+      // ojo
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(obj.x + obj.width * 0.7, cy - obj.height * 0.12, Math.max(2, obj.width * 0.06), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(obj.x + obj.width * 0.74, cy - obj.height * 0.12, Math.max(1, obj.width * 0.03), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawSmallFish(obj) {
+      // obj: { x, y, radius, color }
+      const cx = obj.x;
+      const cy = obj.y;
+      const r = obj.radius;
+
+      // cuerpo
+      ctx.fillStyle = obj.color || '#facc15';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, r, r * 0.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // cola
+      ctx.beginPath();
+      ctx.moveTo(cx - r * 0.6, cy);
+      ctx.lineTo(cx - r * 1.2, cy - r * 0.6);
+      ctx.lineTo(cx - r * 1.2, cy + r * 0.6);
+      ctx.closePath();
+      ctx.fill();
+
+      // ojo pequeño
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(cx + r * 0.4, cy - r * 0.12, Math.max(1, r * 0.18), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(cx + r * 0.48, cy - r * 0.12, Math.max(0.5, r * 0.07), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawShark(obj) {
+      const centerX = obj.x + obj.width / 2;
+      const centerY = obj.y + obj.height / 2;
+      const bodyLength = obj.width * 1.6;
+      const bodyHeight = obj.height * 0.9;
+
+      ctx.fillStyle = obj.color;
+      ctx.beginPath();
+      ctx.ellipse(centerX, centerY, bodyLength / 2, bodyHeight / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(obj.x + obj.width * 0.25, obj.y + obj.height * 0.4);
+      ctx.lineTo(obj.x + obj.width * 0.5, obj.y - obj.height * 0.25);
+      ctx.lineTo(obj.x + obj.width * 0.75, obj.y + obj.height * 0.45);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(obj.x + obj.width * 0.05, obj.y + obj.height * 0.3);
+      ctx.lineTo(obj.x - obj.width * 0.3, obj.y + obj.height * 0.15);
+      ctx.lineTo(obj.x + obj.width * 0.05, obj.y + obj.height * 0.6);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(obj.x + obj.width * 0.75, obj.y + obj.height * 0.33, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(obj.x + obj.width * 0.8, obj.y + obj.height * 0.33);
+      ctx.lineTo(obj.x + obj.width * 0.9, obj.y + obj.height * 0.28);
+      ctx.stroke();
+    }
+
+    function spawnEnemy() {
+      const size = 36 + Math.random() * 30;
+      enemies.push({
+        x: Math.random() * (canvas.width - size),
+        y: -size,
+        width: size,
+        height: size * 0.7,
+        speed: 1.6 + Math.random() * 2.4,
+        color: '#0b0b0b',
+        type: 'orca'
+      });
+    }
+
+    function spawnCoin() {
+      coins.push({
+        x: 24 + Math.random() * (canvas.width - 48),
+        y: -24,
+        radius: 10 + Math.random() * 8,
+        speed: 2.2 + Math.random() * 1.6,
+        color: '#ffb86b',
+        type: 'fish'
+      });
+    }
+
+    function playNote(freq, startTime, duration) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.001, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.12, startTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + duration + 0.05);
+    }
+
+    function scheduleMusic() {
+      let startTime = audioCtx.currentTime + 0.05;
+      melody.forEach((note) => {
+        playNote(note.freq, startTime, note.duration);
+        startTime += note.duration;
+      });
+      setTimeout(() => {
+        if (!gameOver) scheduleMusic();
+      }, melody.reduce((sum, note) => sum + note.duration, 0) * 1000 + 120);
+    }
+
+    function resetGame() {
+      // reset variables
+      score = 0;
+      lives = 3;
+      gameOver = false;
+      enemyTimer = 0;
+      coinTimer = 0;
+      enemyInterval = 90;
+      // limpiar arrays
+      enemies.length = 0;
+      coins.length = 0;
+      scoreEl.textContent = score;
+      livesEl.textContent = lives;
+      messageEl.textContent = 'Mueve el tiburón con el ratón';
+      restartBtn.style.display = 'none';
+      audioStarted = false;
+      // reiniciar loop
+      loop();
+    }
+
+    function playCoinSound() {
+      const now = audioCtx.currentTime;
+      playNote(880, now, 0.08);
+      playNote(1047, now + 0.08, 0.08);
+      playNote(1245, now + 0.16, 0.08);
+    }
+
+    function startMusic() {
+      if (audioStarted) return;
+      audioStarted = true;
+      audioCtx.resume().then(() => scheduleMusic());
+    }
+
+    function update() {
+      if (gameOver) return;
+
+      player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+      player.y = Math.max(0, Math.min(canvas.height - player.height, player.y));
+
+      enemyTimer++;
+      if (enemyTimer >= enemyInterval) {
+        spawnEnemy();
+        enemyTimer = 0;
+        if (enemyInterval > 45) enemyInterval -= 0.5;
+      }
+
+      coinTimer++;
+      if (coinTimer >= coinInterval) {
+        spawnCoin();
+        coinTimer = 0;
+      }
+
+      enemies.forEach((enemy, index) => {
+        enemy.y += enemy.speed;
+        if (enemy.y > canvas.height) enemies.splice(index, 1);
+        if (isColliding(player, enemy)) {
+          enemies.splice(index, 1);
+          lives -= 1;
+          livesEl.textContent = lives;
+          if (lives <= 0) {
+            gameOver = true;
+            messageEl.textContent = '¡Juego terminado! Pulsa Reiniciar para jugar otra vez.';
+            if (restartBtn) restartBtn.style.display = 'inline-block';
+          }
+        }
+      });
+
+      coins.forEach((coin, index) => {
+        coin.y += coin.speed;
+        if (coin.y - coin.radius > canvas.height) coins.splice(index, 1);
+        if (isCircleRectColliding(coin, player)) {
+          coins.splice(index, 1);
+          score += 10;
+          scoreEl.textContent = score;
+          playCoinSound();
+        }
+      });
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawShark(player);
+
+      enemies.forEach(drawOrca);
+      coins.forEach(drawSmallFish);
+
+      ctx.fillStyle = '#ffffffcc';
+      ctx.font = '18px Arial';
+      ctx.fillText('Recoge monedas amarillas y evita los enemigos rojos.', 18, 28);
+    }
+
+    function loop() {
+      update();
+      draw();
+      if (!gameOver) requestAnimationFrame(loop);
+    }
+
+    function isColliding(a, b) {
+      return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+    }
+
+    function isCircleRectColliding(circle, rect) {
+      const distX = Math.abs(circle.x - rect.x - rect.width / 2);
+      const distY = Math.abs(circle.y - rect.y - rect.height / 2);
+      if (distX > rect.width / 2 + circle.radius || distY > rect.height / 2 + circle.radius) return false;
+      if (distX <= rect.width / 2 || distY <= rect.height / 2) return true;
+      const dx = distX - rect.width / 2;
+      const dy = distY - rect.height / 2;
+      return dx * dx + dy * dy <= circle.radius * circle.radius;
+    }
+
+    canvas.addEventListener('mousemove', (event) => {
+      const rect = canvas.getBoundingClientRect();
+      player.x = event.clientX - rect.left - player.width / 2;
+      player.y = event.clientY - rect.top - player.height / 2;
+      startMusic();
+    });
+
+    // reiniciar desde botón
+    if (restartBtn) {
+      restartBtn.addEventListener('click', () => {
+        resetGame();
+      });
+    }
+
+    loop();
+  </script>
+</body>
+
+</html>
